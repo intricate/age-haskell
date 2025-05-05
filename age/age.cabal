@@ -1,0 +1,132 @@
+cabal-version:       3.4
+name:                age
+version:             0.0.1.0
+synopsis:            Actually Good Encryption
+description:
+  Haskell implementation of
+  [age (**A**ctually **G**ood **E**ncryption)](https://age-encryption.org/v1).
+
+  age is a modern file encryption format with multiple pluggable recipients,
+  and seekable streaming encryption.
+
+  For more information about this library and a rundown on how to use it,
+  check out the
+  [README on GitHub](https://github.com/intricate/age-haskell#readme).
+author:              Luke Nadur
+maintainer:          Luke Nadur
+license:             MIT
+license-file:        LICENSE
+category:            Cryptography
+homepage:            https://github.com/intricate/age-haskell
+bug-reports:         https://github.com/intricate/age-haskell/issues
+build-type:          Simple
+tested-with:         GHC == 9.8.2
+extra-source-files:
+  README.md
+  test/golden/**/*.age
+  test/golden/**/*.bin
+  test/golden/**/*.txt
+extra-doc-files:     CHANGELOG.md
+
+library
+  default-language:    Haskell2010
+  hs-source-dirs:      src
+  default-extensions:  DerivingStrategies
+                       GeneralizedNewtypeDeriving
+                       NamedFieldPuns
+                       NoImplicitPrelude
+                       OverloadedStrings
+
+  ghc-options:         -Wall
+                       -Wcompat
+                       -Wincomplete-record-updates
+                       -Wincomplete-uni-patterns
+                       -Wpartial-fields
+                       -Wredundant-constraints
+                       -Wunused-packages
+                       -Wno-unticked-promoted-constructors
+
+  exposed-modules:     Crypto.Age
+                       Crypto.Age.Buffered
+                       Crypto.Age.Conduit
+                       Crypto.Age.Header
+                       Crypto.Age.Identity
+                       Crypto.Age.Identity.Stanza
+                       Crypto.Age.Key
+                       Crypto.Age.Payload.Ciphertext
+                       Crypto.Age.Payload.Counter
+                       Crypto.Age.Payload.Plaintext
+                       Crypto.Age.Recipient
+                       Crypto.Age.Recipient.Stanza
+                       Crypto.Age.Scrypt
+
+  other-modules:       Data.Attoparsec.ByteString.Extra
+                       Data.Binary.Put.Integer
+                       Data.ByteString.Base64.Extra
+                       Data.ByteString.Extra
+
+  build-depends:       base >= 4.17 && < 5
+                     , attoparsec
+                     , base64
+                     , bech32
+                     , binary
+                     , bytestring
+                     , conduit
+                     , conduit-extra
+                     , crypton
+                     , memory
+                     , mono-traversable
+                     , mtl
+                     , text
+
+test-suite age-test
+  default-language:    Haskell2010
+  type:                exitcode-stdio-1.0
+  main-is:             Main.hs
+  hs-source-dirs:      test
+  default-extensions:  DerivingStrategies
+                       GeneralizedNewtypeDeriving
+                       NamedFieldPuns
+                       NoImplicitPrelude
+                       OverloadedStrings
+
+  ghc-options:         -Wall
+                       -Wcompat
+                       -Wredundant-constraints
+                       -Wincomplete-patterns
+                       -Wincomplete-record-updates
+                       -Wincomplete-uni-patterns
+                       -Wunused-imports
+                       -Wunused-packages
+                       -Wno-unticked-promoted-constructors
+
+  other-modules:       Test.Crypto.Age.Conduit
+                       Test.Crypto.Age.Header
+                       Test.Crypto.Age.Header.Gen
+                       Test.Crypto.Age.Identity
+                       Test.Crypto.Age.Identity.Gen
+                       Test.Crypto.Age.Key
+                       Test.Crypto.Age.Key.Gen
+                       Test.Crypto.Age.Key.Render
+                       Test.Crypto.Age.Payload.Counter.Gen
+                       Test.Crypto.Age.Payload.Plaintext.Gen
+                       Test.Crypto.Age.Recipient
+                       Test.Crypto.Age.Recipient.Gen
+                       Test.Crypto.Age.Scrypt
+                       Test.Crypto.Age.Scrypt.Gen
+                       Test.Gen
+                       Test.Golden
+
+  build-depends:       base >= 4.14 && < 5
+                     , age
+                     , attoparsec
+                     , bytestring
+                     , conduit
+                     , crypton
+                     , hedgehog
+                     , memory
+                     , text
+
+source-repository head
+  type:     git
+  location: git://github.com/intricate/age-haskell.git

@@ -1,0 +1,18 @@
+index-state: 2025-05-08T16:29:51Z
+
+packages:
+  age
+
+package age
+  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports -Wno-unticked-promoted-constructors
+
+-- Disable all tests by default.
+
+tests: False
+
+test-show-details: direct
+
+-- Then enable specific tests for individual packages in this repository.
+
+package age
+  tests: True
