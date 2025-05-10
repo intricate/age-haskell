@@ -7,6 +7,8 @@ module Crypto.Age.Payload.Ciphertext
     CiphertextPayloadChunk (..)
   , ciphertextPayloadChunkToBytes
   , ciphertextPayloadChunkParser
+  , authenticationTagSize
+  , ciphertextChunkSize
     -- ** Normal chunk
   , NormalCiphertextPayloadChunk (NormalCiphertextPayloadChunk)
   , mkNormalCiphertextPayloadChunk
@@ -27,9 +29,12 @@ import Data.ByteString ( ByteString )
 import qualified Data.ByteString as BS
 import Prelude hiding ( take )
 
+-- | Size (in bytes) of the @Poly1305@ authentication tag associated with each
+-- ciphertext payload chunk.
 authenticationTagSize :: Int
 authenticationTagSize = 16
 
+-- | Size (in bytes) of a full ciphertext payload chunk.
 ciphertextChunkSize :: Int
 ciphertextChunkSize = plaintextChunkSize + authenticationTagSize
 

@@ -32,7 +32,7 @@ import Control.Monad.IO.Class ( liftIO )
 import Crypto.Age.Header
   ( Header (..)
   , HeaderMac
-  , Stanza
+  , Stanza (..)
   , computeHeaderMac
   , headerBuilder
   , headerParser
@@ -54,6 +54,8 @@ import Crypto.Age.Key
   )
 import Crypto.Age.Payload.Ciphertext
   ( CiphertextPayloadChunk (..)
+  , FinalCiphertextPayloadChunk (..)
+  , authenticationTagSize
   , ciphertextPayloadChunkParser
   , ciphertextPayloadChunkToBytes
   , mkFinalCiphertextPayloadChunk
@@ -80,6 +82,7 @@ import Crypto.Age.Recipient.Stanza
   ( WrapX25519StanzaFileKeyError
   , fromScryptRecipientStanza
   , fromX25519RecipientStanza
+  , scryptStanzaTag
   , wrapFileKeyForScryptRecipient
   , wrapFileKeyForX25519Recipient
   )
@@ -91,13 +94,14 @@ import qualified Data.ByteArray as BA
 import Data.ByteString ( ByteString )
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as Builder
-import Data.Conduit ( ConduitT, await, yield, (.|) )
+import Data.Conduit ( ConduitT, await, leftover, yield, (.|) )
 import Data.Conduit.Attoparsec
   ( ParseError, conduitParserEither, sinkParserEither )
 import qualified Data.Conduit.Combinators as C
+import Data.Foldable ( find )
 import Data.List.NonEmpty ( NonEmpty )
 import qualified Data.List.NonEmpty as NE
-import Data.Maybe ( fromMaybe )
+import Data.Maybe ( fromMaybe, isJust )
 import Prelude
 
 -- | Send an incrementing 'PayloadChunkCounter' downstream alongside each
@@ -200,10 +204,27 @@ conduitEncryptPayload fileKey payloadKeyNonce = do
   yield (Right . BS.toStrict . Builder.toLazyByteString $ payloadKeyNonceBuilder payloadKeyNonce)
 
   -- Consume and encrypt the plaintext.
-  conduitParsePlaintextPayloadChunk
-    .| conduitIncludeCounter
-    .| conduitEncryptChunk payloadKey
-    .| C.map (second ciphertextPayloadChunkToBytes)
+  --
+  -- Ensure that we try to encrypt at least one plaintext chunk. This prevents
+  -- us from creating an invalid age file with no ciphertext chunks.
+  --
+  -- > Streaming decryption MUST signal an error if the end of file is
+  -- > reached without successfully decrypting a final chunk.
+  --
+  -- https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#payload
+  await >>= \case
+    Nothing ->
+      -- There are no upstream values to encrypt, so let's provide an empty
+      -- byte string to be encrypted.
+      --
+      -- That way, we'll create an age file with a single ciphertext payload
+      -- chunk.
+      yield BS.empty
+        .| conduitParseAndEncryptChunk payloadKey
+    Just x -> do
+      leftover x
+      conduitParseAndEncryptChunk payloadKey
+
   where
     conduitEncryptChunk ::
       Monad m =>
@@ -217,6 +238,16 @@ conduitEncryptPayload fileKey payloadKeyNonce = do
           Just (counter, Right chunk) -> do
             yield (Right $ encryptPayloadChunk payloadKey counter chunk)
             go
+
+    conduitParseAndEncryptChunk ::
+      Monad m =>
+      PayloadKey ->
+      ConduitT ByteString (Either EncryptPayloadError ByteString) m ()
+    conduitParseAndEncryptChunk payloadKey =
+      conduitParsePlaintextPayloadChunk
+        .| conduitIncludeCounter
+        .| conduitEncryptChunk payloadKey
+        .| C.map (second ciphertextPayloadChunkToBytes)
 
 -- | Recipient-specific encryption parameters.
 data RecipientEncryptionParams
@@ -412,8 +443,30 @@ decryptPayloadChunk payloadKey counter chunk = do
 data DecryptPayloadError
   = -- | Error parsing the 'PayloadKeyNonce'.
     DecryptPayloadKeyNonceParseError !ParseError
+  | -- | Ciphertext payload is null (i.e. end of input was reached without
+    -- consuming any ciphertext bytes).
+    --
+    -- /\"Streaming decryption MUST signal an error if the end of file is reached without successfully decrypting a final chunk.\"/
+    --
+    -- See the
+    -- [age specification](https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#payload)
+    -- for more information.
+    DecryptPayloadNullPayloadError
   | -- | Error parsing a ciphertext payload chunk.
     DecryptPayloadCiphertextPayloadChunkParseError !ParseError
+  | -- | Encountered an empty final ciphertext payload chunk for a non-empty payload.
+    --
+    -- /\"The final chunk MAY be shorter than 64 KiB but MUST NOT be empty unless the whole payload is empty.\"/
+    --
+    -- See the
+    -- [age specification](https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#payload)
+    -- for more information.
+    --
+    -- Note that \"empty\" here refers to the result of encrypting an empty
+    -- byte string with @ChaCha20-Poly1305@. Meaning that this final chunk only
+    -- consists of a 16-byte @Poly1305@ authentication tag, but no @ChaCha20@
+    -- ciphertext.
+    DecryptPayloadNonEmptyPayloadEmptyFinalChunk
   | -- | Error decrypting a payload chunk.
     DecryptPayloadDecryptPayloadChunkError !PayloadChunkCounter !DecryptPayloadChunkError
   deriving stock (Show)
@@ -426,15 +479,24 @@ conduitDecryptPayload ::
   ConduitT ByteString (Either DecryptPayloadError PlaintextPayloadChunk) m ()
 conduitDecryptPayload fileKey = do
   payloadKeyNonceRes <-
-    conduitParserEither payloadKeyNonceParser
-      .| C.map (bimap DecryptPayloadKeyNonceParseError snd)
-      .| C.headDef (error "impossible: no results in the stream")
+    first DecryptPayloadKeyNonceParseError
+      <$> sinkParserEither payloadKeyNonceParser
   case payloadKeyNonceRes of
     Left err -> yield (Left err)
     Right payloadKeyNonce ->
-      conduitParseCiphertextPayloadChunk
-        .| conduitIncludeCounter
-        .| conduitDecryptChunk (mkPayloadKey payloadKeyNonce fileKey)
+      -- Ensure that we try to decrypt at least one payload chunk.
+      --
+      -- > Streaming decryption MUST signal an error if the end of file is
+      -- > reached without successfully decrypting a final chunk.
+      --
+      -- https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#payload
+      await >>= \case
+        Nothing -> yield (Left DecryptPayloadNullPayloadError)
+        Just x -> do
+          leftover x
+          conduitParseCiphertextPayloadChunk
+            .| conduitIncludeCounter
+            .| conduitDecryptChunk (mkPayloadKey payloadKeyNonce fileKey)
   where
     conduitDecryptChunk ::
       Monad m =>
@@ -445,6 +507,16 @@ conduitDecryptPayload fileKey = do
         go = await >>= \case
           Nothing -> pure ()
           Just (_, Left err) -> yield (Left $ DecryptPayloadCiphertextPayloadChunkParseError err)
+          Just (counter, Right (CiphertextPayloadChunkFinal (FinalCiphertextPayloadChunk chunkBs)))
+            | BS.length chunkBs == authenticationTagSize && counter /= zeroPayloadChunkCounter ->
+              -- Check that the final ciphertext payload chunk is not empty
+              -- unless the whole payload is empty.
+              --
+              -- > The final chunk MAY be shorter than 64 KiB but MUST NOT be
+              -- > empty unless the whole payload is empty.
+              --
+              -- https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#payload
+              yield (Left DecryptPayloadNonEmptyPayloadEmptyFinalChunk)
           Just (counter, Right chunk) ->
             case decryptPayloadChunk payloadKey counter chunk of
               Left err -> yield (Left $ DecryptPayloadDecryptPayloadChunkError counter err)
@@ -456,11 +528,19 @@ conduitDecryptPayload fileKey = do
 data DecryptError
   = -- | Error parsing the file header.
     DecryptHeaderParseError !ParseError
+  | -- | @scrypt@ recipient stanza is not the only stanza in the file header.
+    --
+    -- As noted in the
+    -- [age specification](https://github.com/C2SP/C2SP/blob/34a9210873230d2acaa4a4c9c5d4d1119b2ee77d/age.md#scrypt-recipient-stanza),
+    -- no other stanzas can be specified in the header when there is an
+    -- @scrypt@ stanza. This is to uphold an expectation of authentication that
+    -- is implicit in password-based encryption.
+    DecryptScryptStanzaNotAloneError
   | -- | Error unwrapping a recipient stanza.
     DecryptUnwrapStanzaError !UnwrapStanzaError
   | -- | Error finding any recipient stanza which corresponds to any of the
     -- provided identities.
-    DecryptNoMatchingRecipient
+    DecryptNoMatchingRecipientError
   | -- | Invalid header MAC.
     DecryptInvalidHeaderMacError
       -- | Expected header MAC.
@@ -480,29 +560,56 @@ conduitDecrypt identities = do
   headerRes <- first DecryptHeaderParseError <$> sinkParseHeader
   case headerRes of
     Left err -> yield (Left err)
-    Right Header{hStanzas, hMac} ->
-      -- Attempt to unwrap the file key from any of the recipient stanzas and
-      -- decrypt the payload.
-      case unwrapStanzasWithIdentities identities hStanzas of
-        Left err -> yield (Left $ DecryptUnwrapStanzaError err)
-        Right Nothing -> yield (Left DecryptNoMatchingRecipient)
-        Right (Just fk) -> do
-          -- TODO: Using 'computeHeaderMac' here could possibly open us up to
-          -- canonicalization attacks. We should instead compute the HMAC on
-          -- the /actual/ serialized bytes of the parsed header.
-          --
-          -- The Go implementation of age does the same thing that we do:
-          -- https://github.com/FiloSottile/age/blob/3d91014ea095e8d70f7c6c4833f89b53a96e0832/primitives.go#L52-L63
-          --
-          -- However, the Rust implementation does the right thing:
-          -- - https://github.com/str4d/rage/blob/d7c727aef96cc007e142f5b21c0d19210154b3c7/age/src/format.rs#L27-L33
-          -- - https://github.com/str4d/rage/blob/d7c727aef96cc007e142f5b21c0d19210154b3c7/age/src/format.rs#L63-L74
-          let actualHeaderMac = computeHeaderMac fk hStanzas
-          if hMac /= actualHeaderMac
-            then yield (Left $ DecryptInvalidHeaderMacError hMac actualHeaderMac)
-            else
-              conduitDecryptPayload fk
-                .| C.map (bimap DecryptDecryptPayloadError plaintextPayloadChunkToBytes)
+    Right Header{hStanzas, hMac}
+      | hasScryptStanza hStanzas && (length hStanzas > 1) ->
+        -- If it looks like there's an scrypt recipient stanza in the header,
+        -- check that it is the /only/ stanza (as described in the age
+        -- specification).
+        --
+        -- > scrypt stanzas MAY NOT be mixed with other scrypt stanzas or
+        -- > stanzas of other types
+        --
+        -- https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#scrypt-recipient-stanza
+        yield (Left DecryptScryptStanzaNotAloneError)
+      | otherwise ->
+        -- Attempt to unwrap the file key from any of the recipient stanzas and
+        -- decrypt the payload.
+        case unwrapStanzasWithIdentities identities hStanzas of
+          Left err -> yield (Left $ DecryptUnwrapStanzaError err)
+          Right Nothing -> yield (Left DecryptNoMatchingRecipientError)
+          Right (Just fk) -> do
+            -- TODO: Using 'computeHeaderMac' here could possibly open us up to
+            -- canonicalization issues. We should instead compute the HMAC on
+            -- the /actual/ serialized bytes of the parsed header.
+            --
+            -- The Go implementation of age does the same thing that we do:
+            -- https://github.com/FiloSottile/age/blob/3d91014ea095e8d70f7c6c4833f89b53a96e0832/primitives.go#L52-L63
+            --
+            -- However, the Rust implementation does the right thing:
+            -- - https://github.com/str4d/rage/blob/d7c727aef96cc007e142f5b21c0d19210154b3c7/age/src/format.rs#L27-L33
+            -- - https://github.com/str4d/rage/blob/d7c727aef96cc007e142f5b21c0d19210154b3c7/age/src/format.rs#L63-L74
+            let actualHeaderMac = computeHeaderMac fk hStanzas
+            if hMac /= actualHeaderMac
+              then yield (Left $ DecryptInvalidHeaderMacError hMac actualHeaderMac)
+              else
+                conduitDecryptPayload fk
+                  .| C.map (bimap DecryptDecryptPayloadError plaintextPayloadChunkToBytes)
+  where
+    -- Predicate to check if a 'Stanza' /looks like/ it might be an @scrypt@
+    -- recipient stanza.
+    --
+    -- We do this just by checking the first argument of the stanza.
+    looksLikeScryptStanza :: Stanza -> Bool
+    looksLikeScryptStanza Stanza{sTag} = sTag == scryptStanzaTag
+
+    -- Check whether there is an @scrypt@ recipient stanza in the provided
+    -- list.
+    --
+    -- Note that we don't do a full unwrapping of the recipient stanzas here.
+    -- Instead, we use 'looksLikeScryptStanza' to check if any of the stanzas
+    -- /look like/ an @scrypt@ recipient stanza.
+    hasScryptStanza :: NonEmpty Stanza -> Bool
+    hasScryptStanza stanzas = isJust (find looksLikeScryptStanza stanzas)
 
 -- | Stream and decrypt an age file to a byte string.
 sinkDecrypt ::
