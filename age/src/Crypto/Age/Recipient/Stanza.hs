@@ -6,6 +6,7 @@ module Crypto.Age.Recipient.Stanza
   , ParseScryptStanzaError (..)
   , toScryptRecipientStanza
   , fromScryptRecipientStanza
+  , scryptStanzaTag
 
     -- * X25519 recipient stanza
   , X25519RecipientStanza (..)
@@ -14,6 +15,7 @@ module Crypto.Age.Recipient.Stanza
   , ParseX25519StanzaError (..)
   , toX25519RecipientStanza
   , fromX25519RecipientStanza
+  , x25519StanzaTag
   ) where
 
 import Control.Monad ( unless, when )
@@ -106,6 +108,11 @@ wrapFileKeyForScryptRecipient r fk = do
 
     WorkFactor workFactorW8 = srWorkFactor
 
+-- | @scrypt@ recipient stanza tag (i.e. the first stanza argument).
+--
+-- According to the
+-- [age specification](https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#scrypt-recipient-stanza),
+-- this is expected to be the string, @scrypt@.
 scryptStanzaTag :: ByteString
 scryptStanzaTag = "scrypt"
 
@@ -272,6 +279,11 @@ wrapFileKeyForX25519Recipient (X25519Recipient recipientPk) (X25519Identity send
       , xrsEncryptedFileKey = ciphertext <> BA.convert authTag
       }
 
+-- | X25519 recipient stanza tag (i.e. the first stanza argument).
+--
+-- According to the
+-- [age specification](https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#x25519-recipient-stanza),
+-- this is expected to be the string, @X25519@.
 x25519StanzaTag :: ByteString
 x25519StanzaTag = "X25519"
 

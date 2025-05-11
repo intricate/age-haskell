@@ -16,12 +16,14 @@ import Crypto.Age.Identity
   ( Identity (..), ScryptIdentity (..), toX25519Recipient )
 import Crypto.Age.Recipient ( Recipients (..), ScryptRecipient (..) )
 import Crypto.Age.Scrypt ( WorkFactor (..) )
-import qualified Data.ByteArray as BA
+import qualified Data.ByteString as BS
 import qualified Data.Conduit as C
+import qualified Data.Conduit.List as CL
 import qualified Data.List.NonEmpty as NE
 import Hedgehog
   ( Gen
   , Property
+  , annotateShow
   , checkParallel
   , discover
   , forAll
@@ -68,12 +70,19 @@ prop_roundTrip_conduitEncryptDecrypt = property $ do
   recipientParams <- forAll (genRecipientEncryptionParams recipients)
   fileKey <- forAllWith unsafeRenderFileKey genFileKey
   payloadKeyNonce <- forAll genPayloadKeyNonce
-  expectedPlaintext <- forAll $ Gen.bytes (Range.constant 0 1024)
+  expectedPlaintext <- forAll $ Gen.maybe $ Gen.bytes (Range.constant 0 1024)
+  let sourcePlaintext =
+        case expectedPlaintext of
+          Just bs -> C.yield bs
+          Nothing ->
+            -- Testing the case where no plaintext is streamed.
+            CL.sourceNull
 
   let ciphertextRes =
         C.runConduitPure $
-          C.yield expectedPlaintext
+          sourcePlaintext
             C..| sinkEncryptPure recipientParams fileKey payloadKeyNonce
+  annotateShow ciphertextRes
   ciphertext <-
     case ciphertextRes of
       Left err -> fail $ "failed to encrypt plaintext: " <> show err
@@ -88,7 +97,12 @@ prop_roundTrip_conduitEncryptDecrypt = property $ do
       Left err -> fail $ "failed to decrypt ciphertext: " <> show err
       Right p -> pure p
 
-  expectedPlaintext === (BA.convert actualPlaintext)
+  case expectedPlaintext of
+    Just bs -> bs === actualPlaintext
+    Nothing ->
+      -- In the case where we didn't stream any plaintext, we should've still
+      -- created a valid age file where an empty byte string was encrypted.
+      BS.empty === actualPlaintext
   where
     sinkEncryptPure recipientParams fileKey payloadKeyNonce =
       conduitEncryptPure recipientParams fileKey payloadKeyNonce

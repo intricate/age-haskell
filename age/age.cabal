@@ -114,17 +114,24 @@ test-suite age-test
                        Test.Crypto.Age.Recipient.Gen
                        Test.Crypto.Age.Scrypt
                        Test.Crypto.Age.Scrypt.Gen
+                       Test.Crypto.Age.TestVector
+                       Test.Crypto.Age.TestVector.Header
+                       Test.Crypto.Age.TestVector.Property
                        Test.Gen
                        Test.Golden
 
   build-depends:       base >= 4.14 && < 5
                      , age
                      , attoparsec
+                     , base16
                      , bytestring
                      , conduit
+                     , conduit-extra
                      , crypton
+                     , directory
                      , hedgehog
                      , memory
+                     , mmorph
                      , text
 
 source-repository head
