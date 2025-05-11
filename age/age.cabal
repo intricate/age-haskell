@@ -64,6 +64,7 @@ library
                        Data.Binary.Put.Integer
                        Data.ByteString.Base64.Extra
                        Data.ByteString.Extra
+                       Data.Conduit.Base64
 
   build-depends:       base >= 4.17 && < 5
                      , attoparsec
