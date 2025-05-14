@@ -1,7 +1,13 @@
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE LambdaCase #-}
+
 module Data.Attoparsec.ByteString.Extra
   ( takeWhileMN
+  , countMN
   ) where
 
+import Control.Applicative ( optional )
+import Control.Monad ( MonadPlus )
 import Data.Attoparsec.ByteString ( Parser, scan )
 import Data.ByteString ( ByteString )
 import qualified Data.ByteString as BS
@@ -50,3 +56,29 @@ takeWhileMN m n f
       | s == n = Nothing
       | s < n && f b = Just (s + 1)
       | otherwise = Nothing
+
+-- | Applies from @m@ to @n@ occurrences of @p@. Returns a list of the returned
+-- values of @p@. The value returned by @p@ is forced to WHNF.
+countMN :: MonadPlus m => Word -> Word -> m a -> m [a]
+countMN m n p
+  | m > n = error "countMN: m cannot be greater than n"
+  | n == 0 = pure []
+  | otherwise = reverse <$> goUntilM []
+  where
+    mI :: Int
+    mI = fromIntegral m
+
+    nI :: Int
+    nI = fromIntegral n
+
+    goUntilM !acc
+      | length acc == mI = goUntilN acc
+      | otherwise = do
+          !x <- p
+          goUntilM (x : acc)
+
+    goUntilN !acc
+      | length acc == nI = pure acc
+      | otherwise = optional p >>= \case
+          Nothing -> pure acc
+          Just !x -> goUntilN (x : acc)

@@ -21,20 +21,9 @@ import qualified Crypto.Hash as Crypto
 import qualified Crypto.KDF.HKDF as HKDF
 import qualified Crypto.MAC.HMAC as Crypto
 import Data.Attoparsec.ByteString
-  ( Parser
-  , count
-  , inClass
-  , many'
-  , many1'
-  , satisfy
-  , sepBy1'
-  , string
-  , take
-  , takeWhile1
-  , (<?>)
-  )
+  ( Parser, many', many1', sepBy1', string, take, takeWhile1 )
+import Data.Attoparsec.ByteString.Base64 ( takeMNBase64Chars, takeNBase64Chars )
 import Data.Attoparsec.ByteString.Char8 ( char8 )
-import Data.Attoparsec.ByteString.Extra ( takeWhileMN )
 import Data.ByteArray ( ScrubbedBytes, constEq )
 import qualified Data.ByteArray as BA
 import Data.ByteString ( ByteString )
@@ -49,30 +38,7 @@ import qualified Data.List as L
 import Data.List.NonEmpty ( NonEmpty )
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
-import Data.Word ( Word8 )
 import Prelude hiding ( take )
-
--- | Determine whether a 'Word8' is a valid character in an unpadded base64
--- string.
-isBase64Char :: Word8 -> Bool
-isBase64Char = inClass "a-zA-Z0-9+/"
-
--- | Parse a base64 character.
-base64CharParser :: Parser Word8
-base64CharParser = satisfy isBase64Char <?> "base64 character"
-
--- | Consume exactly @n@ base64 characters.
-takeNBase64Chars :: Word -> Parser ByteString
-takeNBase64Chars n = BS.pack <$> count (fromIntegral n) base64CharParser
-
--- | Consume a base64 character string of length @m <= len <= n@.
-takeMNBase64Chars ::
-  -- | @m@.
-  Word ->
-  -- | @n@.
-  Word ->
-  Parser ByteString
-takeMNBase64Chars m n = takeWhileMN m n isBase64Char
 
 -- | Parse an ABNF @VCHAR@ string as specified in
 -- [RFC 2234 section 6.1](https://www.rfc-editor.org/rfc/rfc2234#section-6.1).
