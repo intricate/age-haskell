@@ -28,7 +28,7 @@ module Crypto.Age.Conduit
   ) where
 
 import Control.Monad ( when )
-import Control.Monad.IO.Class ( liftIO )
+import Control.Monad.IO.Class ( MonadIO (liftIO) )
 import Crypto.Age.Header
   ( Header (..)
   , HeaderMac
@@ -323,8 +323,9 @@ conduitEncryptPure recipientParams fileKey payloadKeyNonce = do
 
 -- | Stream and age encrypt a byte string.
 conduitEncrypt ::
+  MonadIO m =>
   Recipients ->
-  ConduitT ByteString (Either EncryptError ByteString) IO ()
+  ConduitT ByteString (Either EncryptError ByteString) m ()
 conduitEncrypt recipients = do
   recipientParams <- liftIO (mkRecipientEncryptionParams recipients)
   fileKey <- liftIO generateFileKey
@@ -333,8 +334,9 @@ conduitEncrypt recipients = do
 
 -- | Stream and age encrypt a byte string.
 sinkEncrypt ::
+  MonadIO m =>
   Recipients ->
-  ConduitT ByteString o IO (Either EncryptError ByteString)
+  ConduitT ByteString o m (Either EncryptError ByteString)
 sinkEncrypt recipients =
   conduitEncrypt recipients
     .| go mempty
