@@ -26,6 +26,7 @@ import Data.Bifunctor ( first )
 import Data.ByteArray ( ScrubbedBytes )
 import qualified Data.ByteArray as BA
 import Data.Text ( Text )
+import qualified Data.Text as T
 import Prelude
 
 -- | [@scrypt@ identity](https://github.com/C2SP/C2SP/blob/91935d7157cb3860351ffebbad1e6f6153e8efc8/age.md#the-scrypt-recipient-type).
@@ -79,9 +80,10 @@ x25519IdentityBech32Hrp =
 -- [Bech32](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki).
 encodeX25519Identity :: X25519Identity -> Either Bech32.EncodingError Text
 encodeX25519Identity i =
-  Bech32.encode
-    x25519IdentityBech32Hrp
-    (Bech32.dataPartFromBytes . BA.convert $ x25519IdentityToBytes i)
+  T.toUpper
+    <$> Bech32.encode
+      x25519IdentityBech32Hrp
+      (Bech32.dataPartFromBytes . BA.convert $ x25519IdentityToBytes i)
 
 -- | Error decoding an 'X25519Identity' from Bech32.
 data DecodeX25519IdentityError
