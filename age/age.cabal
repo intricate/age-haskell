@@ -67,7 +67,7 @@ library
 
   build-depends:       base >= 4.17 && < 5
                      , attoparsec
-                     , base64
+                     , base64 >= 0.4 && < 1.1
                      , bech32
                      , binary
                      , bytestring
