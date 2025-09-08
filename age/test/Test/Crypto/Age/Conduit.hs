@@ -7,7 +7,7 @@ module Test.Crypto.Age.Conduit
 
 import Crypto.Age.Conduit
   ( RecipientEncryptionParams (..)
-  , conduitEncryptPure
+  , conduitEncryptEitherPure
   , decryptPayloadChunk
   , encryptPayloadChunk
   , sinkDecryptEither
@@ -62,8 +62,8 @@ prop_roundTrip_encryptDecryptPayloadChunk = property $ do
     (encryptPayloadChunk payloadKey counter)
     (decryptPayloadChunk payloadKey counter)
 
--- | Test that 'conduitEncryptPure' (pure variant of 'conduitEncrypt') and
--- 'conduitDecryptEither' round trip.
+-- | Test that 'conduitEncryptEitherPure' (pure variant of 'conduitEncrypt')
+-- and 'conduitDecryptEither' round trip.
 prop_roundTrip_conduitEncryptDecrypt :: Property
 prop_roundTrip_conduitEncryptDecrypt = property $ do
   (senderId, recipients) <- forAll genSenderIdentityAndRecipients
@@ -105,7 +105,7 @@ prop_roundTrip_conduitEncryptDecrypt = property $ do
       BS.empty === actualPlaintext
   where
     sinkEncryptPure recipientParams fileKey payloadKeyNonce =
-      conduitEncryptPure recipientParams fileKey payloadKeyNonce
+      conduitEncryptEitherPure recipientParams fileKey payloadKeyNonce
         C..| go mempty
       where
         go acc = C.await >>= \case

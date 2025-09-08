@@ -39,14 +39,14 @@ import Prelude
 -- | Encrypt a strict 'BS.ByteString'.
 encrypt :: Recipients -> BS.ByteString -> ExceptT EncryptError IO BS.ByteString
 encrypt recipients plaintext =
-  ExceptT . runConduit $
+  runConduit $
     yield plaintext .| sinkEncrypt recipients
 
 -- | Encrypt a lazy 'LBS.ByteString'.
 encryptLazy :: Recipients -> LBS.ByteString -> ExceptT EncryptError IO LBS.ByteString
 encryptLazy recipients plaintext =
-  ExceptT . runConduit $
-    C.sourceLazy plaintext .| conduitEncrypt recipients .| sinkLazyEither
+  runConduit $
+    C.sourceLazy plaintext .| conduitEncrypt recipients .| C.sinkLazy
 
 -------------------------------------------------------------------------------
 -- Decryption

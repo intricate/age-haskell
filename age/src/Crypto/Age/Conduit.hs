@@ -9,8 +9,10 @@ module Crypto.Age.Conduit
     EncryptError (..)
   , EncryptPayloadError (..)
   , conduitEncrypt
-  , conduitEncryptPure
+  , conduitEncryptEither
+  , conduitEncryptEitherPure
   , sinkEncrypt
+  , sinkEncryptEither
     -- ** Buffered
   , encryptPayloadChunk
     -- ** Parameters
@@ -276,10 +278,10 @@ data EncryptError
     EncryptEncryptPayloadError !EncryptPayloadError
   deriving stock (Show)
 
--- | Pure variant of 'conduitEncrypt'.
+-- | Pure variant of 'conduitEncryptEither'.
 --
--- For typical usage, please use 'conduitEncrypt'.
-conduitEncryptPure ::
+-- For typical usage, please use 'conduitEncryptEither'.
+conduitEncryptEitherPure ::
   Monad m =>
   -- | Recipient-specific encryption parameters.
   --
@@ -296,7 +298,7 @@ conduitEncryptPure ::
   -- using 'generatePayloadKeyNonce'.
   PayloadKeyNonce ->
   ConduitT ByteString (Either EncryptError ByteString) m ()
-conduitEncryptPure recipientParams fileKey payloadKeyNonce = do
+conduitEncryptEitherPure recipientParams fileKey payloadKeyNonce = do
   let stanzasRes :: Either WrapX25519StanzaFileKeyError (NonEmpty Stanza)
       stanzasRes =
         case recipientParams of
@@ -327,23 +329,48 @@ conduitEncryptPure recipientParams fileKey payloadKeyNonce = do
         .| C.map (first EncryptEncryptPayloadError)
 
 -- | Stream and age encrypt a byte string.
-conduitEncrypt ::
+--
+-- Errors are returned in the stream. For a variant that only returns errors
+-- after the pipeline is run, see 'conduitEncrypt'.
+conduitEncryptEither ::
   MonadIO m =>
   Recipients ->
   ConduitT ByteString (Either EncryptError ByteString) m ()
-conduitEncrypt recipients = do
+conduitEncryptEither recipients = do
   recipientParams <- liftIO (mkRecipientEncryptionParams recipients)
   fileKey <- liftIO generateFileKey
   payloadKeyNonce <- liftIO generatePayloadKeyNonce
-  conduitEncryptPure recipientParams fileKey payloadKeyNonce
+  conduitEncryptEitherPure recipientParams fileKey payloadKeyNonce
 
 -- | Stream and age encrypt a byte string.
-sinkEncrypt ::
+--
+-- Errors are returned after the pipeline is run. For a variant that includes
+-- errors in the stream, see 'conduitEncryptEither'.
+conduitEncrypt ::
+  MonadIO m =>
+  Recipients ->
+  ConduitT ByteString ByteString (ExceptT EncryptError m) ()
+conduitEncrypt recipients =
+  conduitEncryptEither recipients
+    .| go
+  where
+    go ::
+      Monad m =>
+      ConduitT (Either EncryptError ByteString) ByteString (ExceptT EncryptError m) ()
+    go = awaitForever $ \case
+      Left err -> lift (throwError err)
+      Right bs -> yield bs
+
+-- | Stream and age encrypt a byte string.
+--
+-- Errors are returned in the stream. For a variant that only returns errors
+-- after the pipeline is run, see 'sinkEncrypt'.
+sinkEncryptEither ::
   MonadIO m =>
   Recipients ->
   ConduitT ByteString o m (Either EncryptError ByteString)
-sinkEncrypt recipients =
-  conduitEncrypt recipients
+sinkEncryptEither recipients =
+  conduitEncryptEither recipients
     .| go mempty
   where
     go ::
@@ -354,6 +381,16 @@ sinkEncrypt recipients =
       Nothing -> pure (Right acc)
       Just (Left err) -> pure (Left err)
       Just (Right bs) -> go (acc <> bs)
+
+-- | Stream and age encrypt a byte string.
+--
+-- Errors are returned after the pipeline is run. For a variant that includes
+-- errors in the stream, see 'sinkEncryptEither'.
+sinkEncrypt ::
+  MonadIO m =>
+  Recipients ->
+  ConduitT ByteString o (ExceptT EncryptError m) ByteString
+sinkEncrypt recipients = exceptC (sinkEncryptEither recipients)
 
 -------------------------------------------------------------------------------
 -- Decryption
