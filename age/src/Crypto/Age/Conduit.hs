@@ -22,13 +22,17 @@ module Crypto.Age.Conduit
   , DecryptPayloadError (..)
   , DecryptPayloadChunkError (..)
   , conduitDecrypt
+  , conduitDecryptEither
   , sinkDecrypt
+  , sinkDecryptEither
     -- ** Buffered
   , decryptPayloadChunk
   ) where
 
 import Control.Monad ( when )
+import Control.Monad.Except ( ExceptT, throwError )
 import Control.Monad.IO.Class ( MonadIO (liftIO) )
+import Control.Monad.Trans.Class ( MonadTrans (lift) )
 import Crypto.Age.Header
   ( Header (..)
   , HeaderMac
@@ -94,10 +98,11 @@ import qualified Data.ByteArray as BA
 import Data.ByteString ( ByteString )
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as Builder
-import Data.Conduit ( ConduitT, await, leftover, yield, (.|) )
+import Data.Conduit ( ConduitT, await, awaitForever, leftover, yield, (.|) )
 import Data.Conduit.Attoparsec
   ( ParseError, conduitParserEither, sinkParserEither )
 import qualified Data.Conduit.Combinators as C
+import Data.Conduit.Lift ( exceptC )
 import Data.Foldable ( find )
 import Data.List.NonEmpty ( NonEmpty )
 import qualified Data.List.NonEmpty as NE
@@ -554,11 +559,14 @@ data DecryptError
   deriving stock (Show)
 
 -- | Stream and decrypt an age file.
-conduitDecrypt ::
+--
+-- Errors are returned in the stream. For a variant that only returns errors
+-- after the pipeline is run, see 'conduitDecrypt'.
+conduitDecryptEither ::
   Monad m =>
   NonEmpty Identity ->
   ConduitT ByteString (Either DecryptError ByteString) m ()
-conduitDecrypt identities = do
+conduitDecryptEither identities = do
   headerRes <- first DecryptHeaderParseError <$> sinkParseHeader
   case headerRes of
     Left err -> yield (Left err)
@@ -613,13 +621,35 @@ conduitDecrypt identities = do
     hasScryptStanza :: NonEmpty Stanza -> Bool
     hasScryptStanza stanzas = isJust (find looksLikeScryptStanza stanzas)
 
+-- | Stream and decrypt an age file.
+--
+-- Errors are returned after the pipeline is run. For a variant that includes
+-- errors in the stream, see 'conduitDecryptEither'.
+conduitDecrypt ::
+  Monad m =>
+  NonEmpty Identity ->
+  ConduitT ByteString ByteString (ExceptT DecryptError m) ()
+conduitDecrypt identities =
+  conduitDecryptEither identities
+    .| go
+  where
+    go ::
+      Monad m =>
+      ConduitT (Either DecryptError ByteString) ByteString (ExceptT DecryptError m) ()
+    go = awaitForever $ \case
+      Left err -> lift (throwError err)
+      Right bs -> yield bs
+
 -- | Stream and decrypt an age file to a byte string.
-sinkDecrypt ::
+--
+-- Errors are returned in the stream. For a variant that only returns errors
+-- after the pipeline is run, see 'sinkDecrypt'.
+sinkDecryptEither ::
   Monad m =>
   NonEmpty Identity ->
   ConduitT ByteString o m (Either DecryptError ByteString)
-sinkDecrypt identities =
-  conduitDecrypt identities
+sinkDecryptEither identities =
+  conduitDecryptEither identities
     .| go mempty
   where
     go ::
@@ -630,3 +660,13 @@ sinkDecrypt identities =
       Nothing -> pure (Right acc)
       Just (Left err) -> pure (Left err)
       Just (Right bs) -> go (acc <> bs)
+
+-- | Stream and decrypt an age file to a byte string.
+--
+-- Errors are returned after the pipeline is run. For a variant that includes
+-- errors in the stream, see 'sinkDecryptEither'.
+sinkDecrypt ::
+  Monad m =>
+  NonEmpty Identity ->
+  ConduitT ByteString o (ExceptT DecryptError m) ByteString
+sinkDecrypt identities = exceptC (sinkDecryptEither identities)

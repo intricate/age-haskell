@@ -10,7 +10,7 @@ import Crypto.Age.Conduit
   , conduitEncryptPure
   , decryptPayloadChunk
   , encryptPayloadChunk
-  , sinkDecrypt
+  , sinkDecryptEither
   )
 import Crypto.Age.Identity
   ( Identity (..), ScryptIdentity (..), toX25519Recipient )
@@ -63,7 +63,7 @@ prop_roundTrip_encryptDecryptPayloadChunk = property $ do
     (decryptPayloadChunk payloadKey counter)
 
 -- | Test that 'conduitEncryptPure' (pure variant of 'conduitEncrypt') and
--- 'conduitDecrypt' round trip.
+-- 'conduitDecryptEither' round trip.
 prop_roundTrip_conduitEncryptDecrypt :: Property
 prop_roundTrip_conduitEncryptDecrypt = property $ do
   (senderId, recipients) <- forAll genSenderIdentityAndRecipients
@@ -91,7 +91,7 @@ prop_roundTrip_conduitEncryptDecrypt = property $ do
   let actualPlaintextRes =
         C.runConduitPure $
           C.yield ciphertext
-            C..| sinkDecrypt (NE.singleton senderId)
+            C..| sinkDecryptEither (NE.singleton senderId)
   actualPlaintext <-
     case actualPlaintextRes of
       Left err -> fail $ "failed to decrypt ciphertext: " <> show err
