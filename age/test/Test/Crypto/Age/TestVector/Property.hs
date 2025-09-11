@@ -5,7 +5,7 @@ module Test.Crypto.Age.TestVector.Property
 import Conduit ( ResourceT )
 import Control.Monad ( filterM, when )
 import Crypto.Age.Conduit
-  ( DecryptError (..), DecryptPayloadError (..), sinkDecrypt )
+  ( DecryptError (..), DecryptPayloadError (..), sinkDecryptEither )
 import Data.Conduit ( awaitForever, yield, ($$+), ($$+-), (.|) )
 import Data.Conduit.Attoparsec ( sinkParser )
 import qualified Data.Conduit.Combinators as C
@@ -54,7 +54,7 @@ mkTestVectorProperty fileName = (fileName, prop)
       res <-
         sealedSrc
           $$+- conduitDecompress
-          .| sinkDecrypt (NE.singleton hIdentity)
+          .| sinkDecryptEither (NE.singleton hIdentity)
       case (hExpect, res) of
         (ExpectSuccess, Right _) -> pure ()
         (ExpectNoMatch, Left DecryptNoMatchingRecipientError) -> pure ()

@@ -7,10 +7,10 @@ module Test.Crypto.Age.Conduit
 
 import Crypto.Age.Conduit
   ( RecipientEncryptionParams (..)
-  , conduitEncryptPure
+  , conduitEncryptEitherPure
   , decryptPayloadChunk
   , encryptPayloadChunk
-  , sinkDecrypt
+  , sinkDecryptEither
   )
 import Crypto.Age.Identity
   ( Identity (..), ScryptIdentity (..), toX25519Recipient )
@@ -62,8 +62,8 @@ prop_roundTrip_encryptDecryptPayloadChunk = property $ do
     (encryptPayloadChunk payloadKey counter)
     (decryptPayloadChunk payloadKey counter)
 
--- | Test that 'conduitEncryptPure' (pure variant of 'conduitEncrypt') and
--- 'conduitDecrypt' round trip.
+-- | Test that 'conduitEncryptEitherPure' (pure variant of 'conduitEncrypt')
+-- and 'conduitDecryptEither' round trip.
 prop_roundTrip_conduitEncryptDecrypt :: Property
 prop_roundTrip_conduitEncryptDecrypt = property $ do
   (senderId, recipients) <- forAll genSenderIdentityAndRecipients
@@ -91,7 +91,7 @@ prop_roundTrip_conduitEncryptDecrypt = property $ do
   let actualPlaintextRes =
         C.runConduitPure $
           C.yield ciphertext
-            C..| sinkDecrypt (NE.singleton senderId)
+            C..| sinkDecryptEither (NE.singleton senderId)
   actualPlaintext <-
     case actualPlaintextRes of
       Left err -> fail $ "failed to decrypt ciphertext: " <> show err
@@ -105,7 +105,7 @@ prop_roundTrip_conduitEncryptDecrypt = property $ do
       BS.empty === actualPlaintext
   where
     sinkEncryptPure recipientParams fileKey payloadKeyNonce =
-      conduitEncryptPure recipientParams fileKey payloadKeyNonce
+      conduitEncryptEitherPure recipientParams fileKey payloadKeyNonce
         C..| go mempty
       where
         go acc = C.await >>= \case

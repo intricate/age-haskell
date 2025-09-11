@@ -17,9 +17,9 @@ import Control.Monad.Except ( ExceptT (..) )
 import Crypto.Age.Conduit
   ( DecryptError
   , EncryptError
-  , conduitDecrypt
+  , conduitDecryptEither
   , conduitEncrypt
-  , sinkDecrypt
+  , sinkDecryptEither
   , sinkEncrypt
   )
 import Crypto.Age.Identity ( Identity )
@@ -39,14 +39,14 @@ import Prelude
 -- | Encrypt a strict 'BS.ByteString'.
 encrypt :: Recipients -> BS.ByteString -> ExceptT EncryptError IO BS.ByteString
 encrypt recipients plaintext =
-  ExceptT . runConduit $
+  runConduit $
     yield plaintext .| sinkEncrypt recipients
 
 -- | Encrypt a lazy 'LBS.ByteString'.
 encryptLazy :: Recipients -> LBS.ByteString -> ExceptT EncryptError IO LBS.ByteString
 encryptLazy recipients plaintext =
-  ExceptT . runConduit $
-    C.sourceLazy plaintext .| conduitEncrypt recipients .| sinkLazyEither
+  runConduit $
+    C.sourceLazy plaintext .| conduitEncrypt recipients .| C.sinkLazy
 
 -------------------------------------------------------------------------------
 -- Decryption
@@ -54,13 +54,13 @@ encryptLazy recipients plaintext =
 
 -- | Decrypt a strict 'BS.ByteString'.
 decrypt :: NonEmpty Identity -> BS.ByteString -> Either DecryptError BS.ByteString
-decrypt identities ciphertext = runConduitPure $ yield ciphertext .| sinkDecrypt identities
+decrypt identities ciphertext = runConduitPure $ yield ciphertext .| sinkDecryptEither identities
 
 -- | Decrypt a lazy 'LBS.ByteString'.
 decryptLazy :: NonEmpty Identity -> LBS.ByteString -> Either DecryptError LBS.ByteString
 decryptLazy identities ciphertext =
   runConduitPure $
-    C.sourceLazy ciphertext .| conduitDecrypt identities .| sinkLazyEither
+    C.sourceLazy ciphertext .| conduitDecryptEither identities .| sinkLazyEither
 
 -------------------------------------------------------------------------------
 -- Helpers
