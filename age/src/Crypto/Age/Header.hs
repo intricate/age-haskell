@@ -35,6 +35,7 @@ import qualified Data.ByteString.Builder as Builder
 import Data.ByteString.Extra ( chunksOf )
 import Data.Foldable ( foldMap' )
 import qualified Data.List as L
+import qualified Data.List.Compat as LC
 import Data.List.NonEmpty ( NonEmpty )
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
@@ -101,7 +102,7 @@ stanzaBuilder s = argLineBuilder <> bodyBuilder
 
     bodyBuilder :: Builder
     bodyBuilder =
-      case L.unsnoc bodyB64Chunks of
+      case LC.unsnoc bodyB64Chunks of
         Nothing -> Builder.byteString "\n"
         Just (cs, c) ->
           fullBodyLinesBuilder cs
