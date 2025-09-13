@@ -4,8 +4,11 @@
 -- [ASCII armor](https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#ascii-armor)
 -- encoding and decoding.
 module Crypto.Age.Armor
-  ( -- * Decoding
-    UnarmorError (..)
+  ( -- * Encoding
+    ArmorError (..)
+  , conduitArmor
+    -- * Decoding
+  , UnarmorError (..)
   , conduitUnarmor
   ) where
 
@@ -21,7 +24,8 @@ import Data.ByteString ( ByteString )
 import qualified Data.ByteString as BS
 import Data.Conduit ( ConduitT, await, leftover, transPipe, yield, (.|) )
 import Data.Conduit.Attoparsec ( ParseError, sinkParserEither )
-import Data.Conduit.Base64 ( conduitDecodeBase64 )
+import Data.Conduit.Base64 ( conduitDecodeBase64, conduitEncodeBase64 )
+import qualified Data.Conduit.Combinators as C
 import Data.Text ( Text )
 import Data.Word ( Word8 )
 import Prelude
@@ -34,6 +38,37 @@ lineBegin = "-----BEGIN " <> label <> "-----"
 
 lineEnd :: ByteString
 lineEnd = "-----END " <> label <> "-----"
+
+-------------------------------------------------------------------------------
+-- Encoding
+-------------------------------------------------------------------------------
+
+-- | Error
+-- \"[armoring](https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#ascii-armor)\"
+-- an age file.
+data ArmorError
+  = -- | No data was provided to be armored (i.e. end of input was reached
+    -- without consuming any bytes).
+    ArmorNoDataError
+  deriving stock (Show, Eq)
+
+-- | Stream and
+-- \"[armor](https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#ascii-armor)\"
+-- an age file.
+conduitArmor :: Monad m => ConduitT ByteString ByteString (ExceptT ArmorError m) ()
+conduitArmor = await >>= \case
+  Nothing -> lift (throwError ArmorNoDataError)
+  Just x
+    | BS.null x ->
+        -- An empty 'ByteString' was consumed from upstream, so try again.
+        conduitArmor
+    | otherwise -> do
+        leftover x
+        yield (lineBegin <> "\n")
+        conduitEncodeBase64
+          .| C.chunksOfE 64
+          .| C.intersperse "\n"
+        yield ("\n" <> lineEnd <> "\n")
 
 -------------------------------------------------------------------------------
 -- Decoding
