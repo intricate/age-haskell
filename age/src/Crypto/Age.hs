@@ -22,6 +22,14 @@ module Crypto.Age
     -- ** Errors
   , DecryptError (..)
 
+    -- * ASCII armor
+    -- ** Encoding
+  , ArmorError (..)
+  , conduitArmor
+    -- ** Decoding
+  , UnarmorError (..)
+  , conduitUnarmor
+
     -- * Identity
   , Identity (..)
     -- ** @scrypt@
@@ -51,6 +59,8 @@ module Crypto.Age
   , DecodeX25519RecipientError (..)
   ) where
 
+import Crypto.Age.Armor
+  ( ArmorError (..), UnarmorError (..), conduitArmor, conduitUnarmor )
 import Crypto.Age.Buffered ( decrypt, decryptLazy, encrypt, encryptLazy )
 import Crypto.Age.Conduit
   ( DecryptError (..)

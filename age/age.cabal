@@ -47,6 +47,7 @@ library
                        -Wno-unticked-promoted-constructors
 
   exposed-modules:     Crypto.Age
+                       Crypto.Age.Armor
                        Crypto.Age.Buffered
                        Crypto.Age.Conduit
                        Crypto.Age.Header
@@ -60,10 +61,12 @@ library
                        Crypto.Age.Recipient.Stanza
                        Crypto.Age.Scrypt
 
-  other-modules:       Data.Attoparsec.ByteString.Extra
+  other-modules:       Data.Attoparsec.ByteString.Base64
+                       Data.Attoparsec.ByteString.Extra
                        Data.Binary.Put.Integer
                        Data.ByteString.Base64.Extra
                        Data.ByteString.Extra
+                       Data.Conduit.Base64
 
   build-depends:       base >= 4.17 && < 5
                      , attoparsec
@@ -101,7 +104,8 @@ test-suite age-test
                        -Wunused-packages
                        -Wno-unticked-promoted-constructors
 
-  other-modules:       Test.Crypto.Age.Conduit
+  other-modules:       Test.Crypto.Age.Armor
+                       Test.Crypto.Age.Conduit
                        Test.Crypto.Age.Header
                        Test.Crypto.Age.Header.Gen
                        Test.Crypto.Age.Identity
@@ -133,6 +137,7 @@ test-suite age-test
                      , hedgehog
                      , memory
                      , mmorph
+                     , mtl
                      , text
 
 source-repository head
