@@ -6,7 +6,9 @@ module Crypto.Age
   , encryptLazy
     -- ** Streaming
   , conduitEncrypt
+  , conduitEncryptEither
   , sinkEncrypt
+  , sinkEncryptEither
     -- ** Errors
   , EncryptError (..)
 
@@ -68,9 +70,11 @@ import Crypto.Age.Conduit
   , conduitDecrypt
   , conduitDecryptEither
   , conduitEncrypt
+  , conduitEncryptEither
   , sinkDecrypt
   , sinkDecryptEither
   , sinkEncrypt
+  , sinkEncryptEither
   )
 import Crypto.Age.Identity
   ( DecodeX25519IdentityError (..)
