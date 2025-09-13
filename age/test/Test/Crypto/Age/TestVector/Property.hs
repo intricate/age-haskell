@@ -8,6 +8,7 @@ import Control.Monad.Except ( ExceptT, withExceptT )
 import Crypto.Age.Armor ( UnarmorError (..), conduitUnarmor )
 import Crypto.Age.Conduit
   ( DecryptError (..), DecryptPayloadError (..), sinkDecrypt )
+import qualified Crypto.Hash as Crypto
 import Data.ByteString ( ByteString )
 import Data.Conduit
   ( ConduitT, awaitForever, transPipe, yield, ($$+), ($$+-), (.|) )
@@ -19,7 +20,7 @@ import Data.Foldable ( for_ )
 import Data.List ( sort )
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
-import Hedgehog ( PropertyT, footnote )
+import Hedgehog ( PropertyT, footnote, (===) )
 import Prelude
 import System.Directory ( doesFileExist, listDirectory )
 import Test.Crypto.Age.TestVector.Header
@@ -54,6 +55,7 @@ mkTestVectorProperty fileName = (fileName, prop)
       let Header
             { hExpect
             , hCompressed
+            , hPayload
             , hIdentity
             , hArmored
             , hComment
@@ -74,7 +76,10 @@ mkTestVectorProperty fileName = (fileName, prop)
                   .| transPipe (withExceptT UnarmorOrDecryptDecryptError) (sinkDecrypt (NE.singleton hIdentity))
             )
       case (hExpect, res) of
-        (ExpectSuccess, Right _) -> pure ()
+        (ExpectSuccess, Right actualPayload) ->
+          case hPayload of
+            Just expectedPayloadDigest -> expectedPayloadDigest === Crypto.hash actualPayload
+            Nothing -> fail "expected payload field in test vector file header"
         (ExpectNoMatch, Left (UnarmorOrDecryptDecryptError DecryptNoMatchingRecipientError)) -> pure ()
         (ExpectHmacFailure, Left (UnarmorOrDecryptDecryptError (DecryptInvalidHeaderMacError _ _))) -> pure ()
         (ExpectHeaderFailure, Left (UnarmorOrDecryptDecryptError (DecryptHeaderParseError _))) -> pure ()
