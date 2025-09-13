@@ -104,7 +104,8 @@ test-suite age-test
                        -Wunused-packages
                        -Wno-unticked-promoted-constructors
 
-  other-modules:       Test.Crypto.Age.Conduit
+  other-modules:       Test.Crypto.Age.Armor
+                       Test.Crypto.Age.Conduit
                        Test.Crypto.Age.Header
                        Test.Crypto.Age.Header.Gen
                        Test.Crypto.Age.Identity

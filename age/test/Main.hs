@@ -2,6 +2,7 @@ module Main where
 
 import Hedgehog.Main ( defaultMain )
 import Prelude
+import qualified Test.Crypto.Age.Armor
 import qualified Test.Crypto.Age.Conduit
 import qualified Test.Crypto.Age.Header
 import qualified Test.Crypto.Age.Identity
@@ -13,7 +14,8 @@ import qualified Test.Crypto.Age.TestVector
 main :: IO ()
 main =
   defaultMain
-    [ Test.Crypto.Age.Conduit.tests
+    [ Test.Crypto.Age.Armor.tests
+    , Test.Crypto.Age.Conduit.tests
     , Test.Crypto.Age.Header.tests
     , Test.Crypto.Age.Identity.tests
     , Test.Crypto.Age.Key.tests
