@@ -1,8 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
 -- | Buffered encryption and decryption of age files.
---
--- TODO: maybe call this @Crypto.Age.Simple@?
 module Crypto.Age.Buffered
   ( -- * Encryption
     encrypt
