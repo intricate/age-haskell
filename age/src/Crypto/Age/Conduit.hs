@@ -2,8 +2,6 @@
 {-# LANGUAGE LambdaCase #-}
 
 -- | Streaming encryption and decryption of age files.
---
--- TODO: Maybe call this @Crypto.Age.Streaming@?
 module Crypto.Age.Conduit
   ( -- * Encryption
     EncryptError (..)
@@ -625,9 +623,8 @@ conduitDecryptEither identities = do
           Left err -> yield (Left $ DecryptUnwrapStanzaError err)
           Right Nothing -> yield (Left DecryptNoMatchingRecipientError)
           Right (Just fk) -> do
-            -- TODO: Using 'computeHeaderMac' here could possibly open us up to
-            -- canonicalization issues. We should instead compute the HMAC on
-            -- the /actual/ serialized bytes of the parsed header.
+            -- TODO: Instead of 'computeHeaderMac', we should instead compute
+            -- the HMAC on the /actual/ serialized bytes of the parsed header.
             --
             -- The Go implementation of age does the same thing that we do:
             -- https://github.com/FiloSottile/age/blob/3d91014ea095e8d70f7c6c4833f89b53a96e0832/primitives.go#L52-L63
