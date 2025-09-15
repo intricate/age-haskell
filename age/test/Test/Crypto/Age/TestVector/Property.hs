@@ -96,7 +96,7 @@ mkTestVectorProperty fileName = (fileName, prop)
           -- https://github.com/C2SP/C2SP/blob/03ab74455beb3a6d6e0fb7dd1de5a932e2257cd0/age.md#payload
           pure ()
         (ExpectHeaderFailure, Left (UnarmorOrDecryptDecryptError DecryptNoMatchingRecipientError))
-          | fileName == "scrypt_work_factor_23" ->
+          | fileName == "scrypt_work_factor_23.test" ->
             -- In our implementation, the maximum work factor value permitted
             -- is 64, but this test vector expects us to fail in the event that
             -- it's 23.

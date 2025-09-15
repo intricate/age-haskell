@@ -25,6 +25,7 @@ extra-source-files:
   README.md
   test/golden/**/*.bin
   test/golden/**/*.txt
+  test/test-vectors/*.test
 extra-doc-files:     CHANGELOG.md
 
 library
