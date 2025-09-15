@@ -4,14 +4,14 @@ version:             0.0.1.0
 synopsis:            Actually Good Encryption
 description:
   Haskell implementation of
-  [age (**A**ctually **G**ood **E**ncryption)](https://age-encryption.org/v1).
+  [age (__A__ctually __G__ood __E__ncryption)](https://age-encryption.org/v1).
 
   age is a modern file encryption format with multiple pluggable recipients,
   and seekable streaming encryption.
 
-  For more information about this library and a rundown on how to use it,
-  check out the
-  [README on GitHub](https://github.com/intricate/age-haskell#readme).
+  The recommended entry point for this library is "Crypto.Age".
+
+  __⚠️ Warning: This is an experimental pre-release which is still under development. As a result, the API is unstable and subject to breaking changes.__
 author:              Luke Nadur
 maintainer:          Luke Nadur
 license:             MIT
