@@ -23,7 +23,6 @@ build-type:          Simple
 tested-with:         GHC == 9.8.2, GHC == 9.4.8
 extra-source-files:
   README.md
-  test/golden/**/*.age
   test/golden/**/*.bin
   test/golden/**/*.txt
 extra-doc-files:     CHANGELOG.md
